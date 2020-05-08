@@ -3,6 +3,8 @@
 #include <stdlib.h>  /* NULL */
 
 #define EXPECT(c, ch)       do { assert(*c->json == (ch)); c->json++; } while(0)
+//lept_type对应类型的字符串
+char lept_type_str[][6] = {"null", "false", "true"};
 
 typedef struct {
     const char* json;
@@ -42,13 +44,51 @@ static int lept_parse_false(lept_context* c, lept_value* v) {
 	return LEPT_PARSE_OK;
 }
 
+static int lept_parse_number(lept_context* c, lept_value* v) {
+	char *end = NULL;
+	v->n = strtod(c->json, &end);
+	if (c->json == end)
+		return LEPT_PARSE_INVALID_VALUE;
+	c->json = end;
+	v->type = LEPT_NUMBER;
+	return LEPT_PARSE_OK;
+}
+
+static int lept_parse_literal(lept_context* c, lept_value* v, lept_type t) {
+	char* ptype = lept_type_str[t];
+	EXPECT(c, ptype[0]);
+	ptype++;
+	int len = strlen(ptype);
+	int cnt = 0;
+	while (*c->json != '\0' && *ptype != '\0')
+	{
+		if (*c->json != *ptype)
+		{
+			return LEPT_PARSE_INVALID_VALUE;
+		}
+		c->json++;
+		ptype++;
+		cnt++;
+	}
+
+	if (cnt != len)
+	{
+		return LEPT_PARSE_INVALID_VALUE;
+	}
+
+	//c->json += len;
+	v->type = t;
+	return LEPT_PARSE_OK;
+}
+
 static int lept_parse_value(lept_context* c, lept_value* v) {
     switch (*c->json) {
-        case 'n':  return lept_parse_null(c, v);
-		case 't':  return lept_parse_true(c, v);
-		case 'f':  return lept_parse_false(c, v);
+        case 'n':  return lept_parse_literal(c, v, LEPT_NULL);
+		case 't':  return lept_parse_literal(c, v, LEPT_TRUE);
+		case 'f':  return lept_parse_literal(c, v, LEPT_FALSE);
+		default:   return lept_parse_number(c, v);
         case '\0': return LEPT_PARSE_EXPECT_VALUE;
-        default:   return LEPT_PARSE_INVALID_VALUE;
+        //default:   return LEPT_PARSE_INVALID_VALUE;
     }
 }
 
@@ -59,7 +99,7 @@ int lept_parse(lept_value* v, const char* json) {
     c.json = json;
     v->type = LEPT_NULL;
     lept_parse_whitespace(&c);
-	if (ret = lept_parse_value(&c, v) == LEPT_PARSE_OK) {
+	if ((ret = lept_parse_value(&c, v)) == LEPT_PARSE_OK) {
 		lept_parse_whitespace(&c);
 		if (*c.json != '\0')
 			ret = LEPT_PARSE_ROOT_NOT_SINGULAR;
@@ -70,4 +110,9 @@ int lept_parse(lept_value* v, const char* json) {
 lept_type lept_get_type(const lept_value* v) {
     assert(v != NULL);
     return v->type;
+}
+
+double lept_get_number(const lept_value* v) {
+	assert(v != NULL && v->type == LEPT_NUMBER);
+	return v->n;
 }
